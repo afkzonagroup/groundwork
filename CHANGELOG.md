@@ -6,6 +6,8 @@ project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-11-08
+
 ### Added
 
 - Resume in SCORM: a module left before it is passed is suspended

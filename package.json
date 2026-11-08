@@ -1,6 +1,6 @@
 {
   "name": "@afkzona/groundwork",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Open AI literacy course for Article 4 of the EU AI Act: Markdown modules with quizzes, an offline accessible course site, SCORM 1.2 and xAPI export, and tamper-evident training records.",
   "license": "AGPL-3.0-only",
   "author": "MB AFKzona Group",
