@@ -28,10 +28,8 @@ AFKzona Group offers a commercial licence that adds:
   SCORM packages and exports.
 - **Warranty and indemnity options.**
 - **Priority support** with agreed response times.
-- **Enterprise features** (not part of this repository): hosted dashboard,
-  continuous monitoring of training coverage across sites and entities,
-  SSO/SAML, roles and permissions, audit evidence packs, a legal-update feed,
-  and SLA-backed support.
+- **Services:** integration into your systems, custom connectors and
+  features, and support agreements, quoted per project.
 
 ## Contact
 
