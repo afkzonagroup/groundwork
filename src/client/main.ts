@@ -10,7 +10,15 @@
  */
 
 import { type AnswerKey, grade, parseAnswerKey } from './grade.js';
-import { ScormSession, findScormApi } from './scorm.js';
+import { type RecordingMode, type ResumeState, ScormSession, decodeLessonLocation, decodeSuspendData, findScormApi } from './scorm.js';
+
+/** What the page says when the LMS does not record results in this session. */
+const NOT_RECORDED: Readonly<Record<RecordingMode, string>> = {
+  normal: '',
+  browse: 'This is a preview. Your result will not be recorded.',
+  review: 'You are reviewing this module. Your result will not be recorded.',
+  'no-credit': 'Your learning platform does not record results for this module.',
+};
 
 function selected(form: HTMLFormElement, id: string): number | undefined {
   const inputs = form.querySelectorAll<HTMLInputElement>('input[type="radio"]');
@@ -21,6 +29,41 @@ function selected(form: HTMLFormElement, id: string): number | undefined {
     }
   }
   return undefined;
+}
+
+function chosenAnswers(form: HTMLFormElement, key: AnswerKey): Map<string, number> {
+  const answers = new Map<string, number>();
+  for (const a of key.answers) {
+    const choice = selected(form, a.id);
+    if (choice !== undefined) answers.set(a.id, choice);
+  }
+  return answers;
+}
+
+/** Index of the first section of the page that is still in view. */
+function sectionInView(doc: Document): number {
+  const sections = doc.querySelectorAll('main section');
+  for (let i = 0; i < sections.length; i++) if ((sections[i]?.getBoundingClientRect().bottom ?? 0) > 0) return i;
+  return 0;
+}
+
+/** Puts back answers and the reading position saved when the learner left. Returns true if anything was restored. */
+function restore(doc: Document, form: HTMLFormElement, key: AnswerKey, suspendData: string, lessonLocation: string): boolean {
+  let restored = false;
+  for (const [id, choice] of decodeSuspendData(suspendData, key)) {
+    const input = doc.getElementById(`q-${id}-${String(choice)}`);
+    if (input instanceof HTMLInputElement && input.type === 'radio' && input.name === `q-${id}` && form.contains(input)) {
+      input.checked = true;
+      restored = true;
+    }
+  }
+  const section = decodeLessonLocation(lessonLocation);
+  const target = section === undefined ? undefined : doc.querySelectorAll('main section')[section];
+  if (target && section !== 0) {
+    target.scrollIntoView();
+    restored = true;
+  }
+  return restored;
 }
 
 function optionLabel(doc: Document, id: string, index: number): string {
@@ -43,6 +86,8 @@ function setup(doc: Document, win: Window): void {
   }
 
   let session: ScormSession | undefined;
+  // True while the checked answers are shown; nothing is left to resume then.
+  let checked = false;
   const scormStatus = doc.getElementById('gw-scorm-status');
   if (doc.body.dataset.scorm === '1') {
     const api = findScormApi(win);
@@ -50,9 +95,14 @@ function setup(doc: Document, win: Window): void {
       session = new ScormSession(api, Date.now());
       if (!session.start()) session = undefined;
     }
-    if (scormStatus) scormStatus.textContent = session ? '' : 'Your learning platform could not be reached. Your result will not be recorded.';
+    const resumed = session?.isRecording() ? session.resumedData() : undefined;
+    const restored = resumed ? restore(doc, form, key, resumed.suspendData, resumed.lessonLocation) : false;
+    if (scormStatus) {
+      scormStatus.textContent = !session ? 'Your learning platform could not be reached. Your result will not be recorded.' : session.isRecording() ? (restored ? 'Welcome back. You are where you left off, with the answers you had chosen.' : '') : NOT_RECORDED[session.recordingMode()];
+    }
     const finish = (): void => {
-      session?.finish(Date.now());
+      const state: ResumeState = { answers: checked ? new Map() : chosenAnswers(form, key), section: sectionInView(doc) };
+      session?.finish(Date.now(), state);
     };
     win.addEventListener('pagehide', finish);
     win.addEventListener('beforeunload', finish);
@@ -60,11 +110,7 @@ function setup(doc: Document, win: Window): void {
 
   form.addEventListener('submit', (event) => {
     event.preventDefault();
-    const responses = new Map<string, number>();
-    for (const a of key.answers) {
-      const choice = selected(form, a.id);
-      if (choice !== undefined) responses.set(a.id, choice);
-    }
+    const responses = chosenAnswers(form, key);
     const missing = key.answers.filter((a) => !responses.has(a.id));
     if (missing.length > 0) {
       result.textContent = `Please answer every question before checking. ${String(missing.length)} not answered yet.`;
@@ -86,6 +132,7 @@ function setup(doc: Document, win: Window): void {
       feedback.hidden = false;
     }
     for (const input of form.querySelectorAll<HTMLInputElement>('input[type="radio"]')) input.disabled = true;
+    checked = true;
     const verdictText = outcome.passed ? 'You passed this module.' : `You have not passed yet. You need ${String(key.passMark)} % to pass. Read the explanations and try again.`;
     result.textContent = `You answered ${String(outcome.correct)} of ${String(outcome.total)} questions correctly (${String(outcome.percent)} %). ${verdictText}`;
     if (session && scormStatus) {
@@ -95,7 +142,9 @@ function setup(doc: Document, win: Window): void {
           ? 'Your result has been sent to your learning platform.'
           : sent === 'kept'
             ? 'You passed this module before; your learning platform keeps that result.'
-            : 'Your learning platform did not accept the result.';
+            : sent === 'not-recorded'
+              ? `${NOT_RECORDED[session.recordingMode()]} Your answers were checked here only.`
+              : 'Your learning platform did not accept the result.';
     }
     submit.hidden = true;
     retry.hidden = false;
@@ -103,6 +152,7 @@ function setup(doc: Document, win: Window): void {
   });
 
   retry.addEventListener('click', () => {
+    checked = false;
     form.reset();
     for (const input of form.querySelectorAll<HTMLInputElement>('input[type="radio"]')) input.disabled = false;
     for (const fieldset of form.querySelectorAll('fieldset')) fieldset.classList.remove('is-correct', 'is-wrong');

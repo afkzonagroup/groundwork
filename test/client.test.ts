@@ -6,7 +6,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { grade, parseAnswerKey } from '../src/client/grade.js';
-import { MAX_API_SEARCH_DEPTH, type Scorm12Api, ScormSession, type WindowLike, findScormApi, formatCmiTimespan } from '../src/client/scorm.js';
+import { MAX_API_SEARCH_DEPTH, MAX_SUSPEND_DATA, type Scorm12Api, ScormSession, type WindowLike, decodeLessonLocation, decodeSuspendData, encodeLessonLocation, encodeSuspendData, findScormApi, formatCmiTimespan } from '../src/client/scorm.js';
 import { CLIENT_SCRIPT } from '../src/site/client-script.generated.js';
 import { OUTPUT, bundleClient } from '../scripts/client-bundle.mjs';
 import { readFileSync } from 'node:fs';
@@ -114,6 +114,8 @@ describe('SCORM 1.2 session', () => {
       'cmi.core.score.raw': '90',
       'cmi.core.session_time': '01:02:03.45',
       'cmi.core.exit': '',
+      'cmi.suspend_data': '',
+      'cmi.core.lesson_location': '',
     });
     expect(api.calls[0]).toBe('init');
     expect(api.calls.filter((c) => c === 'finish')).toHaveLength(1);
@@ -156,6 +158,126 @@ describe('SCORM 1.2 session', () => {
     expect(s.report(90, true)).toBe('refused');
   });
 
+  it('suspends a module that is not passed yet, with the chosen answers and the section in view', () => {
+    const api = fakeApi();
+    const s = new ScormSession(api, 0);
+    s.start();
+    expect(s.resumedData()).toBeUndefined();
+    s.finish(5000, { answers: new Map([['q1', 2], ['q2', 0]]), section: 3 });
+    expect(api.data.get('cmi.core.exit')).toBe('suspend');
+    expect(api.data.get('cmi.suspend_data')).toBe('{"v":1,"a":[["q1",2],["q2",0]]}');
+    expect(api.data.get('cmi.core.lesson_location')).toBe('3');
+    expect(api.data.get('cmi.core.session_time')).toBe('00:00:05.00');
+    expect(api.calls.slice(-2)).toEqual(['commit', 'finish']);
+  });
+
+  it('suspends a failed module too, so the learner returns to the same attempt', () => {
+    const api = fakeApi();
+    const s = new ScormSession(api, 0);
+    s.start();
+    s.report(40, false);
+    s.finish(10, { answers: new Map(), section: 0 });
+    expect(api.data.get('cmi.core.exit')).toBe('suspend');
+    expect(api.data.get('cmi.suspend_data')).toBe('');
+    expect(api.data.get('cmi.core.lesson_location')).toBe('0');
+  });
+
+  it('exits normally and clears the saved state once the module is passed', () => {
+    const api = fakeApi();
+    api.data.set('cmi.suspend_data', '{"v":1,"a":[["q1",2]]}');
+    api.data.set('cmi.core.lesson_location', '4');
+    const s = new ScormSession(api, 0);
+    s.start();
+    s.report(100, true);
+    s.finish(10, { answers: new Map([['q1', 1]]), section: 2 });
+    expect(api.data.get('cmi.core.exit')).toBe('');
+    expect(api.data.get('cmi.suspend_data')).toBe('');
+    expect(api.data.get('cmi.core.lesson_location')).toBe('');
+  });
+
+  it('hands back the saved state only when the LMS resumes the session', () => {
+    const api = fakeApi('incomplete');
+    api.data.set('cmi.core.entry', 'resume');
+    api.data.set('cmi.suspend_data', '{"v":1,"a":[["q1",2]]}');
+    api.data.set('cmi.core.lesson_location', '2');
+    const s = new ScormSession(api, 0);
+    s.start();
+    expect(s.resumedData()).toEqual({ suspendData: '{"v":1,"a":[["q1",2]]}', lessonLocation: '2' });
+  });
+
+  it('also resumes when suspend data is present but the entry value is stale (Moodle, same player visit)', () => {
+    for (const entry of ['', 'ab-initio']) {
+      const api = fakeApi('incomplete');
+      api.data.set('cmi.core.entry', entry);
+      api.data.set('cmi.suspend_data', '{"v":1,"a":[["q1",2]]}');
+      const s = new ScormSession(api, 0);
+      s.start();
+      expect(s.resumedData(), entry).toEqual({ suspendData: '{"v":1,"a":[["q1",2]]}', lessonLocation: '' });
+      api.data.set('cmi.suspend_data', '');
+      const clean = new ScormSession(api, 0);
+      clean.start();
+      expect(clean.resumedData(), entry).toBeUndefined();
+    }
+  });
+
+  it('records nothing in browse or review mode (Moodle Preview)', () => {
+    for (const mode of ['browse', 'review'] as const) {
+      const api = fakeApi();
+      api.data.set('cmi.core.lesson_mode', mode);
+      api.data.set('cmi.suspend_data', '{"v":1,"a":[["q1",2]]}');
+      const s = new ScormSession(api, 0);
+      expect(s.start(), mode).toBe(true);
+      expect(s.isRecording(), mode).toBe(false);
+      expect(s.recordingMode(), mode).toBe(mode);
+      expect(s.resumedData(), mode).toBeUndefined();
+      expect(s.report(0, false), mode).toBe('not-recorded');
+      s.finish(2000, { answers: new Map([['q1', 1]]), section: 1 });
+      const status = mode === 'browse' ? 'browsed' : 'not attempted';
+      expect(Object.fromEntries(api.data), mode).toEqual({
+        'cmi.core.lesson_status': status,
+        'cmi.core.lesson_mode': mode,
+        'cmi.suspend_data': '{"v":1,"a":[["q1",2]]}',
+        'cmi.core.session_time': '00:00:02.00',
+        'cmi.core.exit': '',
+      });
+      const sets = ['set cmi.core.session_time=00:00:02.00', 'set cmi.core.exit='];
+      expect(api.calls.filter((c) => c.startsWith('set ')), mode).toEqual(mode === 'browse' ? ['set cmi.core.lesson_status=browsed', ...sets] : sets);
+    }
+  });
+
+  it('keeps an earlier status when a module is previewed again', () => {
+    const api = fakeApi('passed');
+    api.data.set('cmi.core.lesson_mode', 'browse');
+    new ScormSession(api, 0).start();
+    expect(api.data.get('cmi.core.lesson_status')).toBe('passed');
+  });
+
+  it('records nothing without credit, and says why', () => {
+    const api = fakeApi();
+    api.data.set('cmi.core.lesson_mode', 'normal');
+    api.data.set('cmi.core.credit', 'no-credit');
+    const s = new ScormSession(api, 0);
+    s.start();
+    expect(s.recordingMode()).toBe('no-credit');
+    expect(s.isRecording()).toBe(false);
+    expect(api.data.get('cmi.core.lesson_status')).toBe('not attempted');
+    expect(s.report(100, true)).toBe('not-recorded');
+    s.finish(10, { answers: new Map([['q1', 1]]), section: 1 });
+    expect(api.data.get('cmi.core.exit')).toBe('');
+    expect(api.data.has('cmi.suspend_data')).toBe(false);
+  });
+
+  it('records in normal mode', () => {
+    const api = fakeApi();
+    api.data.set('cmi.core.lesson_mode', 'normal');
+    api.data.set('cmi.core.credit', 'credit');
+    const s = new ScormSession(api, 0);
+    s.start();
+    expect(s.isRecording()).toBe(true);
+    expect(s.recordingMode()).toBe('normal');
+    expect(s.report(90, true)).toBe('sent');
+  });
+
   it('formats CMITimespan values', () => {
     expect(formatCmiTimespan(0)).toBe('00:00:00.00');
     expect(formatCmiTimespan(-5)).toBe('00:00:00.00');
@@ -163,6 +285,50 @@ describe('SCORM 1.2 session', () => {
     expect(formatCmiTimespan(100 * 3600 * 1000)).toBe('100:00:00.00');
     expect(formatCmiTimespan(1e15)).toBe('9999:59:59.99');
     for (const v of [0, 1234, 3_600_000, 1e12]) expect(formatCmiTimespan(v)).toMatch(/^[0-9]{2,4}:[0-9]{2}:[0-9]{2}\.[0-9]{2}$/);
+  });
+});
+
+describe('SCORM 1.2 suspend data and lesson location', () => {
+  const key = { answers: [{ id: 'q1' }, { id: 'q2' }] };
+
+  it('round-trips chosen answers', () => {
+    const answers = new Map([['q1', 2], ['q2', 9]]);
+    expect(decodeSuspendData(encodeSuspendData(answers), key)).toEqual(answers);
+    expect(encodeSuspendData(new Map())).toBe('');
+    expect(decodeSuspendData('', key)).toEqual(new Map());
+  });
+
+  it('never writes more than CMIString4096 allows, or values it would not read back', () => {
+    const many = new Map(Array.from({ length: 300 }, (_, i) => [`question-${String(i).padStart(40, '0')}`, 1] as [string, number]));
+    expect(encodeSuspendData(many)).toBe('');
+    expect(encodeSuspendData(new Map([['Q 1', 1], ['q2', 10], ['q3', -1], ['q4', 1.5], ['q5', 3]]))).toBe('{"v":1,"a":[["q5",3]]}');
+  });
+
+  it.each([
+    ['not JSON', '{'],
+    ['wrong version', '{"v":2,"a":[["q1",1]]}'],
+    ['not an object', '[["q1",1]]'],
+    ['null', 'null'],
+    ['answers not a list', '{"v":1,"a":{"q1":1}}'],
+    ['unknown question', '{"v":1,"a":[["q9",1]]}'],
+    ['option out of range', '{"v":1,"a":[["q1",10]]}'],
+    ['negative option', '{"v":1,"a":[["q1",-1]]}'],
+    ['fractional option', '{"v":1,"a":[["q1",0.5]]}'],
+    ['option as text', '{"v":1,"a":[["q1","1"]]}'],
+    ['malformed pair', '{"v":1,"a":[["q1",1,2]]}'],
+    ['prototype key', '{"v":1,"a":[["__proto__",1]]}'],
+    ['too long', `{"v":1,"a":[]}${' '.repeat(MAX_SUSPEND_DATA)}`],
+  ])('ignores suspend data that is %s', (_name, text) => {
+    expect(decodeSuspendData(text, key)).toEqual(new Map());
+  });
+
+  it('accepts only section indexes it wrote as the lesson location', () => {
+    expect(encodeLessonLocation(0)).toBe('0');
+    expect(encodeLessonLocation(12)).toBe('12');
+    for (const bad of [-1, 1.5, 1000, Number.NaN]) expect(encodeLessonLocation(bad), String(bad)).toBe('');
+    expect(decodeLessonLocation('0')).toBe(0);
+    expect(decodeLessonLocation('999')).toBe(999);
+    for (const bad of ['', '01', '1000', '-1', '1e2', ' 1', 'page-2']) expect(decodeLessonLocation(bad), bad).toBeUndefined();
   });
 });
 

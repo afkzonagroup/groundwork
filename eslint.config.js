@@ -3,7 +3,7 @@ import js from '@eslint/js';
 import tseslint from 'typescript-eslint';
 
 export default tseslint.config(
-  { ignores: ['dist/', 'dist-typecheck/', 'coverage/', 'node_modules/', 'site/', 'out/'] },
+  { ignores: ['dist/', 'dist-typecheck/', 'coverage/', 'node_modules/', 'site/', 'out/', '.lms-cache/', '.lms-out/'] },
   js.configs.recommended,
   ...tseslint.configs.strictTypeChecked,
   {
@@ -43,6 +43,6 @@ export default tseslint.config(
   },
   {
     files: ['scripts/**/*.mjs'],
-    languageOptions: { globals: { process: 'readonly' } },
+    languageOptions: { globals: { process: 'readonly', fetch: 'readonly', AbortSignal: 'readonly' } },
   },
 );

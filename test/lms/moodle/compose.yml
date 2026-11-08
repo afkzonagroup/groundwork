@@ -1,0 +1,45 @@
+# Copyright 2026 MB AFKzona Group
+# SPDX-License-Identifier: AGPL-3.0-only
+#
+# Throwaway Moodle for scripts/lms-moodle-check.mjs. Not for production.
+# Web port bound to 127.0.0.1 only; the database has no published port.
+# Images are pinned by digest; the Moodle code is the official release
+# archive, checked against its SHA-256 by the script and mounted read-only.
+
+name: groundwork-lms-moodle
+
+services:
+  db:
+    # Official PostgreSQL image, 17.11 (Moodle 5.3 requires PostgreSQL 17 or later).
+    image: postgres:17.11@sha256:ff87138949ad9a46f32ff23bd6852b52ce024a13dffe9b4087be98292cdd3b4f
+    environment:
+      POSTGRES_USER: moodle
+      POSTGRES_PASSWORD: ${GW_LMS_DB_PASSWORD:?set by the check script}
+      POSTGRES_DB: moodle
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U moodle -d moodle']
+      interval: 2s
+      timeout: 3s
+      retries: 60
+    volumes:
+      - db:/var/lib/postgresql/data
+
+  web:
+    # Moodle HQ's official PHP + Apache image (the base of moodle-docker), PHP 8.3, Debian bookworm.
+    image: moodlehq/moodle-php-apache:8.3-bookworm@sha256:1db7b6ed013fcb5268095b5e28c410ba9117d38d9b6a324c100c48fcbe69745e
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      GW_LMS_DB_PASSWORD: ${GW_LMS_DB_PASSWORD:?set by the check script}
+      GW_LMS_WWWROOT: ${GW_LMS_WWWROOT:?set by the check script}
+    ports:
+      - '127.0.0.1:${GW_LMS_PORT:?set by the check script}:80'
+    volumes:
+      - ${GW_LMS_MOODLE_DIR:?set by the check script}:/var/www/html:ro
+      - ./php:/opt/groundwork:ro
+      - moodledata:/var/www/moodledata
+
+volumes:
+  db:
+  moodledata:

@@ -9,3 +9,5 @@ coverage/
 /site/
 *.zip
 test/.tmp/
+.lms-cache/
+.lms-out/
