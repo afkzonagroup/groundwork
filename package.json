@@ -70,5 +70,8 @@
     "typescript": "6.0.3",
     "typescript-eslint": "8.72.1",
     "vitest": "4.1.12"
+  },
+  "overrides": {
+    "minimatch": "11.0.5"
   }
 }
