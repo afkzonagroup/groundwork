@@ -265,10 +265,10 @@ checked by a test).
   is available ([COMMERCIAL.md](COMMERCIAL.md)).
 - "Groundwork" is a trademark of MB AFKzona Group ([TRADEMARKS.md](TRADEMARKS.md)).
 
-**Enterprise.** AFKzona Group offers a hosted dashboard, continuous
-monitoring of training coverage across sites and entities, SSO/SAML, roles
-and permissions, audit evidence packs, a legal-update feed, and SLA support.
-These are not part of this repository. Contact info@afkzonagroup.lt.
+**Enterprise.** MB AFKzona Group offers a commercial licence for
+organisations that cannot use the AGPL-3.0 terms (including white-label use
+without the attribution notice), integration into your systems, custom
+connectors and features, and support agreements. Contact info@afkzonagroup.lt.
 
 ## Contributing
 
