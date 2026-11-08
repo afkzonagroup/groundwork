@@ -1,0 +1,41 @@
+name: LMS
+
+# Takes the SCORM 1.2 package through a real Moodle and a real ILIAS in Docker
+# (scripts/lms-moodle-check.mjs, scripts/lms-ilias-check.mjs).
+# On demand, and on pull requests that change the SCORM package or its runtime. No push or scheduled runs.
+on:
+  pull_request:
+    paths:
+      - 'src/client/**'
+      - 'src/scorm/**'
+      - 'src/site/**'
+      - 'src/xml/**'
+      - 'src/zip/**'
+      - 'scripts/lms-*.mjs'
+      - 'test/lms/**'
+      - '.github/workflows/lms.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  lms:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        lms: ['moodle', 'ilias']
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npm run build
+      - run: npx playwright-core install --with-deps chromium
+      - run: node scripts/lms-${{ matrix.lms }}-check.mjs

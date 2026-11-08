@@ -1,0 +1,54 @@
+# Copyright 2026 MB AFKzona Group
+# SPDX-License-Identifier: AGPL-3.0-only
+#
+# Throwaway ILIAS for scripts/lms-ilias-check.mjs. Not for production.
+# Web port bound to 127.0.0.1 only; the database has no published port.
+# Images are pinned by digest.
+
+name: groundwork-lms-ilias
+
+services:
+  db:
+    # Official MariaDB image, 10.11 LTS.
+    image: mariadb:10.11.19@sha256:d769e37960821dfdcf096954f6e7ac89f747e116c1bba98e48edd265dfc7deae
+    # ILIAS creates its tables in utf8 (3-byte); utf8mb4 makes some rows too large.
+    command: ['--character-set-server=utf8', '--collation-server=utf8_general_ci']
+    environment:
+      MARIADB_ROOT_PASSWORD: ${GW_LMS_DB_ROOT_PASSWORD:?set by the check script}
+      MARIADB_DATABASE: ilias
+      MARIADB_USER: ilias
+      MARIADB_PASSWORD: ${GW_LMS_DB_PASSWORD:?set by the check script}
+    healthcheck:
+      test: ['CMD', 'healthcheck.sh', '--connect', '--innodb_initialized']
+      interval: 2s
+      timeout: 3s
+      retries: 60
+    volumes:
+      - db:/var/lib/mysql
+
+  web:
+    # sr solutions' ILIAS image (srsolutionsag/docker-ilias), ILIAS 11.5, PHP 8.3, Apache.
+    image: srsolutions/ilias:11.5-php8.3-apache@sha256:6275876e410278ea123d5c7fc91ea431bfdb96717494bc39204df953ac35ce0c
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      ILIAS_AUTO_SETUP: '1'
+      ILIAS_DB_HOST: db
+      ILIAS_DB_USER: ilias
+      ILIAS_DB_NAME: ilias
+      ILIAS_DB_PASSWORD: ${GW_LMS_DB_PASSWORD:?set by the check script}
+      ILIAS_ROOT_PASSWORD: ${GW_LMS_ADMIN_PASSWORD:?set by the check script}
+      ILIAS_HTTP_PATH: ${GW_LMS_WWWROOT:?set by the check script}
+      ILIAS_CLIENT_NAME: default
+      ILIAS_TIMEZONE: UTC
+    ports:
+      - '127.0.0.1:${GW_LMS_PORT:?set by the check script}:80'
+    volumes:
+      - data:/var/www/html/public/data
+      - iliasdata:/var/iliasdata/ilias
+
+volumes:
+  db:
+  data:
+  iliasdata:
