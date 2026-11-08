@@ -54,7 +54,8 @@ describe('help and errors', () => {
     expect(r.out).toContain('Groundwork by AFKzona Group <https://afkzonagroup.lt>');
     expect(r.out).toContain('not legal advice');
     expect((await cli([])).code).toBe(2);
-    expect((await cli(['--version'])).out).toBe('0.1.0\n');
+    const pkgVersion = (JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8')) as { version: string }).version;
+    expect((await cli(['--version'])).out).toBe(`${pkgVersion}\n`);
   });
 
   it('exits with 2 and a clear message for usage errors, without stack traces', async () => {

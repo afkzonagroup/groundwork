@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 /** Package version, kept equal to package.json (checked by a test). */
-export const VERSION = '0.1.0';
+export const VERSION = '0.1.1';
 
 /** Product name used in the attribution notice. */
 export const PRODUCT = 'Groundwork';
