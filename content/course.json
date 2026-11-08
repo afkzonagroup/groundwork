@@ -1,0 +1,34 @@
+{
+  "id": "ai-literacy",
+  "title": "AI literacy at work",
+  "description": "A short course for everyone who uses, builds, buys or manages AI systems at work: what AI is, how it fails, how to use it safely, what the AI Act asks, and when to raise a concern.",
+  "version": "1.0.0",
+  "language": "en",
+  "passMark": 80,
+  "roles": [
+    {
+      "id": "staff",
+      "title": "All staff",
+      "description": "For everyone who uses AI tools at work or works with their results."
+    },
+    {
+      "id": "builders",
+      "title": "People building or buying AI",
+      "description": "For developers, product owners, data teams and purchasers who build, configure, integrate or choose AI systems."
+    },
+    {
+      "id": "managers",
+      "title": "Managers",
+      "description": "For people who lead teams that use AI and decide how the organisation supports AI literacy."
+    }
+  ],
+  "modules": [
+    "ai-literacy-at-work",
+    "ai-basics",
+    "data-protection",
+    "checking-outputs",
+    "transparency",
+    "prohibited-practices",
+    "escalation"
+  ]
+}

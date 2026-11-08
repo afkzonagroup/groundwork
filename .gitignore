@@ -1,0 +1,11 @@
+node_modules/
+dist/
+dist-typecheck/
+coverage/
+*.tsbuildinfo
+.DS_Store
+/out/
+/tmp/
+/site/
+*.zip
+test/.tmp/
