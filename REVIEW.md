@@ -264,3 +264,29 @@ diff in the history.
 - `npm run check`: typecheck, lint and 234 tests pass; coverage 97.9 % of
   lines, 86.8 % of branches.
 - `npm audit --omit=dev`: 0 vulnerabilities.
+
+## Live LMS testing (issue #9)
+
+The SCORM package was taken through Moodle 5.3.0 LTS and ILIAS 11.5.0 in
+Docker, uploaded by an administrator through the web interface and completed
+by a learner in Chromium, with the stored data read back after every step
+(`scripts/lms-moodle-check.mjs`, `scripts/lms-ilias-check.mjs`). This closes
+open decision 5 above: Moodle applies the mastery score as expected and an
+earlier pass is kept.
+
+| # | Found | Fixed |
+|---|---|---|
+| 1 | Moodle Preview recorded a checked quiz as a real attempt (`failed`, score, grade 0); a preview without a quiz became `completed`. | Browse, review and no-credit sessions report nothing and say so; an unattempted module is set to `browsed` in a preview. |
+| 2 | A module closed halfway exited normally with nothing saved, so the learner started over. | Suspend with chosen answers and section; restore on return. |
+| 3 | Moodle gives a stale `cmi.core.entry` when a learner returns to a module in the same player visit, so a resume keyed on `entry` alone did not restore. | Resume also when suspend data is present (only ever written on suspend; cleared on a normal exit). |
+| 4 | ILIAS without learning progress runs modules with `no-credit`, silently drops scores and statuses, and the page still said "sent". | No-credit is detected and the page says results are not recorded; ILIAS setting documented. |
+| 5 | xAPI import treated a Group actor, or an actor with two identifiers, as a person. | Skipped and counted. |
+
+Records integrity was checked end to end through the CLI: edits, re-hashed
+lines, swapped lines, truncation (with `--expect-head`), wrong keys,
+re-hashed HMAC chains and downgrades to a plain chain are all detected as
+documented. Two behaviours stay open for the owner (issue #10): `record
+verify` without a key exits 0 on an HMAC file even when the chain was
+re-hashed by someone without the key (it says "HMAC not checked"), and xAPI
+imports without `--account-home-page` accept accounts from any system.
+

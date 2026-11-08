@@ -112,9 +112,28 @@ groundwork check-scorm groundwork-staff.zip
 ```
 
 One SCO per module. Each reports the score, passed or failed and the session
-time to the LMS through the SCORM 1.2 API. Upload the ZIP to a SCORM 1.2
-platform such as Moodle. The runtime has been tested against a SCORM 1.2 API
-stub, not yet in a live LMS. Details: [docs/lms.md](docs/lms.md).
+time to the LMS through the SCORM 1.2 API. A learner who leaves a module
+before passing it comes back to the same place, with the answers chosen so
+far. In a preview, or when the LMS gives no credit, nothing is recorded and
+the page says so. Upload the ZIP to a SCORM 1.2 platform such as Moodle or
+ILIAS. Details and recommended settings: [docs/lms.md](docs/lms.md).
+
+## Tested LMS
+
+The package is tested end to end in real installations in Docker: an
+administrator uploads it through the web interface, a learner takes the
+course in Chromium, and the check reads what the platform stored.
+
+| LMS | Version | Result |
+|---|---|---|
+| Moodle | 5.3.0 LTS (PHP 8.3, PostgreSQL 17) | Pass: status, score, retries, kept pass, suspend and resume, time, gradebook, activity completion, Preview |
+| ILIAS | 11.5.0 (PHP 8.3, MariaDB 10.11) | Pass: status, score, retries, kept pass, suspend and resume, time, learning progress, no-credit mode |
+
+Run the checks with `node scripts/lms-moodle-check.mjs` and
+`node scripts/lms-ilias-check.mjs` (Docker needed). In Moodle, set the
+completion to *Require status: Passed* and *Require all scos to return
+completion status*; in ILIAS, turn on learning progress for the module.
+Results, settings and platform quirks: [docs/lms.md](docs/lms.md#tested-learning-platforms).
 
 ## Training records
 
@@ -251,9 +270,11 @@ small, and this avoids a dependency in the package that handles personal
 data.
 
 Development only (exact versions in `package.json`): TypeScript, ESLint with
-typescript-eslint, Vitest with V8 coverage, and esbuild (bundles the page
+typescript-eslint, Vitest with V8 coverage, esbuild (bundles the page
 script into `src/site/client-script.generated.ts`, which is committed and
-checked by a test).
+checked by a test), and playwright-core (drives Chromium in the live LMS
+checks under `scripts/`; it has no dependencies of its own and downloads no
+browser at install).
 
 ## Licence and Enterprise
 

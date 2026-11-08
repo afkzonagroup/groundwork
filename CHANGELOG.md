@@ -6,6 +6,31 @@ project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- Resume in SCORM: a module left before it is passed is suspended
+  (`cmi.core.exit` "suspend") with the chosen answers in `cmi.suspend_data`
+  and the section in `cmi.core.lesson_location`; reopening it restores both.
+- Live LMS checks: `scripts/lms-moodle-check.mjs` and
+  `scripts/lms-ilias-check.mjs` take the SCORM package through Moodle 5.3 LTS
+  and ILIAS 11.5 in Docker (compose files in `test/lms/`) and check what the
+  LMS stored. The `LMS` workflow runs them on demand and on pull requests
+  that change the SCORM code. Results in the README and `docs/lms.md`.
+
+### Fixed
+
+- SCORM: a quiz checked in Moodle's Preview was recorded as a real attempt
+  (status "failed", score and a grade of 0), and a preview without a quiz
+  was stored as "completed". In "browse" and "review" mode, and when the LMS
+  gives no credit (`cmi.core.credit` "no-credit", as ILIAS does without
+  learning progress), the page now reports nothing, tells the learner, and
+  marks an unattempted module "browsed" in a preview.
+- SCORM: a module closed halfway always exited normally, so the LMS had no
+  reason to resume it and nothing to resume with.
+- xAPI import: statements by a Group, or by an actor with more than one
+  identifier, were imported as a person's records. They are now skipped and
+  counted.
+
 ## [0.1.0] - 2026-11-08
 
 ### Added
