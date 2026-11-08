@@ -195,6 +195,9 @@ export interface ImportResult {
 /** Maximum number of statements in one import. */
 export const MAX_STATEMENTS = 100_000;
 
+/** The inverse functional identifiers of an xAPI Agent (xAPI 1.0.3, Data 2.4.2.3). */
+const IFI_KEYS = ['mbox', 'mbox_sha1sum', 'openid', 'account'] as const;
+
 const RESULT_BY_VERB = new Map<string, Result>(Object.entries(VERBS).map(([k, v]) => [v, k as Result]));
 
 function isObj(v: unknown): v is Record<string, unknown> {
@@ -241,6 +244,17 @@ export function fromStatements(data: unknown, options: ImportOptions, now: Date 
     const result = typeof verbId === 'string' ? RESULT_BY_VERB.get(verbId) : undefined;
     if (!result) {
       skip('other verb');
+      continue;
+    }
+    // xAPI 1.0.3, Data 2.4.2.1 and 2.4.2.2: an Agent (a person) has objectType "Agent" or none, and
+    // exactly one inverse functional identifier. A Group's result is not a person's, and an actor
+    // with two identifiers is invalid and could name two people.
+    if (s.actor.objectType !== undefined && s.actor.objectType !== 'Agent') {
+      skip('actor is not a person (group)');
+      continue;
+    }
+    if (IFI_KEYS.filter((k) => Object.hasOwn(s.actor as object, k)).length > 1) {
+      skip('actor with more than one identifier');
       continue;
     }
     let person: string | undefined;

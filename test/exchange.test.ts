@@ -223,6 +223,9 @@ describe('xAPI', () => {
         { ...base, timestamp: 'yesterday' },
         { ...base, timestamp: '2099-01-01T00:00:00Z' },
         { ...base, actor: { account: { homePage: home, name: 'E1\u202E' } } },
+        { ...base, actor: { objectType: 'Group', account: { homePage: home, name: 'team-a' }, member: [] } },
+        { ...base, actor: { objectType: 'Group', member: [{ account: { homePage: home, name: 'E1' } }] } },
+        { ...base, actor: { objectType: 'Agent', account: { homePage: home, name: 'E2' }, mbox: 'mailto:e3@example.com' } },
         'garbage',
       ],
       { courseId: 'ai-literacy', role: 'staff', accountHomePage: home },
@@ -237,8 +240,15 @@ describe('xAPI', () => {
       'invalid score': 1,
       'invalid timestamp': 1,
       'invalid record': 2,
+      'actor is not a person (group)': 2,
+      'actor with more than one identifier': 1,
       'not a statement': 1,
     });
+  });
+
+  it('accepts an Agent with an explicit objectType', () => {
+    const s = { actor: { objectType: 'Agent', account: { homePage: home, name: 'E5' } }, verb: { id: VERBS.passed }, object: { id: 'urn:groundwork:ai-literacy/ai-basics' }, timestamp: '2026-11-01T10:00:00Z' };
+    expect(fromStatements([s], { courseId: 'ai-literacy', role: 'staff', accountHomePage: home }, NOW).inputs[0]).toMatchObject({ person: 'E5', result: 'passed' });
   });
 
   it('accepts email actors only when allowed, and raw scores', () => {
